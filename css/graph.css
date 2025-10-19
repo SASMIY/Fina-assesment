@@ -1,0 +1,33 @@
+
+body{
+        background: #000;
+        color:#0f0;
+        font-family: monospace;
+        border:10px solid #0f0;
+        /* Flexbox makes header - plot - footer stack vertically */
+        min-height:100vh;
+        flex-direction:column;
+        margin:0;
+        display:flex;
+}
+
+/* consistent spacing for header + footer */
+header,footer{
+        padding:10px;
+        text-align:center;
+}
+
+/* Inputs and buttons styled consistently */
+input,button{
+        margin:5px;
+        background:#111;
+        padding:6px;
+        color:#0f0;
+        border:1px solid #0f0;
+}
+
+/* Plot container expands to fill leftover space */
+#plot{
+        flex:1;
+}
+

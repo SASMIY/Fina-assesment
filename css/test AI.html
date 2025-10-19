@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Math AI — Local Exact + LaTeX Preview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- MathJax v3 for LaTeX rendering -->
+  <script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <!-- Nerdamer (exact CAS) -->
+  <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/nerdamer.core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Algebra.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Calculus.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Solve.min.js"></script>
+
+  <style>
+    body { font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; max-width: 900px; }
+    h1 { margin: 0 0 8px; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    textarea { width: 100%; min-height: 96px; font: 16px/1.4 monospace; padding: 10px; }
+    button { padding: 8px 12px; border: 0; border-radius: 10px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.1);}
+    button.primary { background: #2563eb; color: white; }
+    button.secondary { background: #e5e7eb; }
+    #status { min-height: 20px; color: #475569; }
+    #log { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; height: 280px; overflow: auto; background: #fafafa; }
+    .msg { padding: 6px 8px; border-radius: 8px; margin: 6px 0; white-space: pre-wrap; }
+    .msg.you { background: #e0f2fe; }
+    .msg.local { background: #ecfccb; }
+    .msg.ai { background: #fef9c3; }
+    #latexPreview { margin: 8px 0 12px; padding: 10px; border-left: 3px solid #94a3b8; background: #f8fafc; border-radius: 8px;}
+    .quick { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 12px; }
+    .quick button { background: #f1f5f9; }
+    small.warn { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <h1>Math AI (Local Exact + LaTeX Preview)</h1>
+  <div class="row">
+    <div style="flex:1">
+      <textarea id="input" placeholder="Type LaTeX or plain math. Examples:  \frac{2x-1}{x+3}=5   or   differentiate x^2*sin(x)  or   \int x^2 dx"></textarea>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:8px">
+      <button id="ask" class="primary">Compute</button>
+      <button id="clear" class="secondary">Clear</button>
+    </div>
+  </div>
+
+  <div class="quick">
+    <button data-q="solve x^2-5x+6=0">solve x^2-5x+6=0</button>
+    <button data-q="differentiate x^2\\sin(x)">differentiate x^2\sin(x)</button>
+    <button data-q="\\int x^2\\,dx">\\int x^2\,dx</button>
+    <button data-q="simplify \\frac{3x}{x^2}">simplify \frac{3x}{x^2}</button>
+    <button data-q="factor x^3-1">factor x^3-1</button>
+  </div>
+
+  <div id="latexPreview"></div>
+  <div id="status"></div>
+  <div id="log"></div>
+
+  <p>
+    <small class="warn">
+      Security: don’t ever put provider API keys in client JavaScript. If you enable AI explanations, proxy via your own server endpoint.
+    </small>
+  </p>
+
+<script>
+/* -------------------- DOM HOOKS -------------------- */
+const $in = document.getElementById("input");
+const $ask = document.getElementById("ask");
+const $clear = document.getElementById("clear");
+const $log = document.getElementById("log");
+const $status = document.getElementById("status");
+const $preview = document.getElementById("latexPreview");
+
+const setStatus = t => $status.textContent = t || "";
+const addMsg = (cls, who, text) => {
+  const d = document.createElement("div");
+  d.className = `msg ${cls}`;
+  d.textContent = `${who}: ${text}`;
+  $log.appendChild(d);
+  $log.scrollTop = $log.scrollHeight;
+};
+
+/* -------------------- LATEX → INFIX (common cases) -------------------- */
+/* Fast, pragmatic converter to feed Nerdamer. Handles \frac, \sqrt, trig, pi, ^, \cdot etc. */
+function latexToInfix(lx) {
+  if (!lx) return "";
+  let s = String(lx);
+
+  // Strip wrappers and spacing commands
+  s = s.replace(/\\\(|\\\)|\$\$?/g, "");
+  s = s.replace(/\\(,|;|:|!|quad|qquad|hspace\{[^}]*\})/g, " ");
+  s = s.replace(/\\left|\\right/g, "");
+
+  // Constants & functions
+  s = s.replace(/\\pi\b/g, "pi");
+  s = s.replace(/\\ln\b/g, "ln");
+  s = s.replace(/\\log\b/g, "log");
+  s = s.replace(/\\sin\b/g, "sin");
+  s = s.replace(/\\cos\b/g, "cos");
+  s = s.replace(/\\tan\b/g, "tan");
+  s = s.replace(/\\csc\b/g, "csc");
+  s = s.replace(/\\sec\b/g, "sec");
+  s = s.replace(/\\cot\b/g, "cot");
+  s = s.replace(/\\exp\b/g, "exp");
+
+  // Operators
+  s = s.replace(/\\cdot|\\times/g, "*");
+  s = s.replace(/\\div/g, "/");
+  s = s.replace(/\\pm/g, "+-");
+  s = s.replace(/\\leq/g, "<=");
+  s = s.replace(/\\geq/g, ">=");
+  s = s.replace(/\\neq/g, "!=");
+
+  // sqrt forms
+  s = s.replace(/\\sqrt\{([^}]*)\}/g, "sqrt($1)");
+  s = s.replace(/\\sqrt\[([^]]+)\]\{([^}]*)\}/g, "($2)^(1/($1))");
+
+  // Fractions — iterate to unwind nesting
+  for (let i = 0; i < 10 && /\\frac\{[^}]*\}\{[^}]*\}/.test(s); i++) {
+    s = s.replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "($1)/($2)");
+  }
+
+  // Superscripts
+  s = s.replace(/\^\{([^}]*)\}/g, "^($1)");
+  s = s.replace(/\^([A-Za-z0-9\)])(?!\()/g, "^($1)");
+
+  // Replace remaining single-level braces with parentheses (safe-ish)
+  s = s.replace(/\{([^\{\}]*)\}/g, "($1)");
+
+  // Implicit multiplication fixes: 2x, )(, x(2x+1)
+  s = s
+    .replace(/(\d)([a-zA-Z\(])/g, "$1*$2")
+    .replace(/([a-zA-Z\)])(\d)/g, "$1*$2")
+    .replace(/(\))\s*(\()/g, "$1*$2");
+
+  return s.trim();
+}
+
+/* -------------------- NORMALISATION FOR NERDAMER -------------------- */
+const toNerdamer = (s) => String(s).trim()
+  .replace(/π/g, "pi")
+  .replace(/(\d)([a-z\(])/gi, "$1*$2")
+  .replace(/([a-z\)])(\d)/gi, "$1*$2")
+  .replace(/([a-z\)])\(/gi, "$1*(");
+
+/* -------------------- INTENT DETECTION -------------------- */
+const intent = (q) => {
+  const t = q.trim().toLowerCase();
+  if (t.includes("=")) return "solve";
+  if (t.startsWith("differentiate") || /\\dfrac?d|\\frac\{d/.test(t)) return "differentiate";
+  if (t.startsWith("integrate") || /^\\int\b/.test(t)) return "integrate";
+  if (t.startsWith("factor")) return "factor";
+  if (t.startsWith("simplify")) return "simplify";
+  return "plain";
+};
+
+/* -------------------- LOCAL EXACT COMPUTE -------------------- */
+function computeLocal(raw) {
+  if (typeof nerdamer === "undefined") {
+    return "Local error: Nerdamer failed to load.";
+  }
+
+  const what = intent(raw);
+  const norm = latexToInfix(raw);
+  try {
+    if (what === "solve") {
+      // Allow 'solve ' prefix; handle L=R by moving to L-R=0
+      const text = norm.replace(/^solve\s*/i, "");
+      const [L, R] = text.split("=");
+      const eq = R !== undefined ? `(${L})-(${R})` : text;
+      const sol = nerdamer.solve(toNerdamer(eq), "x");
+      return `Solution: x = ${sol.toString()}`;
+    }
+    if (what === "differentiate") {
+      const fx = norm.replace(/^differentiate\s*/i, "");
+      return `Derivative: ${nerdamer.diff(toNerdamer(fx), "x").toString()}`;
+    }
+    if (what === "integrate") {
+      const fx = norm.replace(/^integrate\s*/i, "");
+      return `Integral: ${nerdamer.integrate(toNerdamer(fx), "x").toString()} + C`;
+    }
+    if (what === "factor") {
+      const fx = norm.replace(/^factor\s*/i, "");
+      return `Factored: ${nerdamer.factor(toNerdamer(fx)).toString()}`;
+    }
+    if (what === "simplify") {
+      const fx = norm.replace(/^simplify\s*/i, "");
+      return `Simplified: ${nerdamer(toNerdamer(fx)).simplify().toString()}`;
+    }
+    // plain evaluate
+    return `Result: ${nerdamer(toNerdamer(norm)).evaluate().toString()}`;
+  } catch (e) {
+    return `Local error: ${e}`;
+  }
+}
+
+/* -------------------- (Optional) AI EXPLAINER STUB -------------------- */
+/* Don’t put provider keys in client code. If you expose one, you deserve the bill.
+   If you have a server proxy at /api/gemini, switch USE_AI to true. */
+const USE_AI = false;
+async function askAI(question, localResult) {
+  if (!USE_AI) return "(AI disabled — add your server proxy and set USE_AI=true)";
+  try {
+    const res = await fetch("/api/gemini", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        question,
+        localResult,
+        instruction: "Explain step-by-step. Final answer must match local result."
+      })
+    });
+    if (!res.ok) return `AI error ${res.status}: ${await res.text()}`;
+    const data = await res.json();
+    return data.text || "(no text)";
+  } catch (e) {
+    return `AI network error: ${e}`;
+  }
+}
+
+/* -------------------- UI WIRING -------------------- */
+document.querySelectorAll(".quick button").forEach(b =>
+  b.addEventListener("click", () => { $in.value = b.dataset.q; $ask.click(); })
+);
+
+$in.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $ask.click(); }
+});
+
+/* Render LaTeX preview */
+async function renderLatexPreview(latex) {
+  try {
+    if (window.MathJax?.startup?.promise) await MathJax.startup.promise;
+    $preview.innerHTML = latex ? `\\[ ${latex} \\]` : "";
+    if (window.MathJax?.typesetPromise) await MathJax.typesetPromise([$preview]);
+  } catch (e) {
+    console.warn("MathJax render failed:", e);
+  }
+}
+
+$ask.addEventListener("click", async () => {
+  const q = $in.value.trim();
+  if (!q) return;
+
+  addMsg("you", "You", q);
+  setStatus("Rendering LaTeX…");
+  await renderLatexPreview(q);
+
+  setStatus("Computing locally…");
+  const local = computeLocal(q);
+  addMsg("local", "Local", local);
+
+  setStatus("Explaining with AI…");
+  const ai = await askAI(q, local);
+  addMsg("ai", "AI", ai);
+
+  setStatus("");
+  $in.value = "";
+});
+
+$clear.addEventListener("click", () => { $log.innerHTML = ""; setStatus(""); renderLatexPreview(""); });
+
+/* Greeting */
+addMsg("ai", "AI",
+  "Hi! I compute exact answers locally (Nerdamer) and render LaTeX with MathJax.\n" +
+  "Try: solve \\frac{2x-1}{x+3}=5, differentiate x^2\\sin(x), \\int x^2\\,dx, factor x^3-1."
+);
+</script>
+
+</body>
+</html>

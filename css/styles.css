@@ -1,0 +1,133 @@
+/* central variables so theme can be updated in one place       */
+  :root{
+        --BC:#000000;
+        --outer:#00ff41;
+        --inner:#006400;
+        --button_background:#111111;
+        --button_text:#00ff41;
+        --radius:14px;
+  }  
+  
+  /* Page: Centers the calculator and gives it a neon frame. */
+  body{
+       margin: 0; 
+       min-height: 100dvh;        
+       display: grid;
+       place-items: center;
+       background: var(--BC);
+       border: 12px solid var(--outer);
+       box-sizing: border-box;
+       font-family: -apple-system,Segoe UI,Roboto,Ubuntu,Calibri,Arial,sans-serif;
+       color:var(--button_text)
+  }
+/* Responsive max width
+Light interor for contrast with neon */
+  .calc{
+        position: relative;
+        width:min(520px,92vw);
+        background: #fafafa;
+        padding: 28px 26px 30px;
+        border: 6px solid var(--outer);
+        border-radius: 20px;
+  }
+/* Decorative inner border ring for depth */
+  .calc::after{
+        content: "";
+        position:absolute;
+        inset:16px;
+        border: 4px solid var(--inner);
+        border-radius:14px;
+        pointer-events:none;
+  }
+/* Title:centered,neon-colored */
+  h1{
+        margin:4px 0 18px;
+        text-align:center;
+        color:var(--outer);
+        font-size: 1.6rem;
+  }
+/* DISPLAY: Read-only screen for resulsts/expression */
+  .screen{
+        height:48px;
+        width:94%;
+        padding:10px 14px;
+        font-size: 1.05rem;
+        border:2px solid var(--outer);
+        border-radius: 8px;
+        background:var(--button_text);
+  }
+  /* grid for all buttons-5 colums uniform */
+  .grid{
+    margin-top:18px;
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:14px;    
+  }
+  /* buttons consistent look and feedback */
+  button{
+        border:2px solid var(--outer);
+        background:var(--button_background);
+        color: var(--button_text);
+        border-radius:6px;
+        padding:10px 0;
+        font-size:1rem;
+        line-height:1;
+        cursor:pointer;
+  }
+  button:active{
+        transform:translateY(1px);
+  }
+  .warn{
+        background:#330000;
+        border-color:#ff4d4d;
+        color:#ff4d4d;
+  }
+  .ok{
+        background:#001900;
+        border-color: #00ff41;
+        color:#00ff41;
+  }
+  .primary{
+        background:#001933;
+        color:#00ffff;
+        border-color: #00ffff;
+        font-weight:600;
+  }
+  .span-2{
+        grid-column:span 2;
+  }
+  /* subtle glow for cyber-terminal  */
+  button,.screen{
+        box-shadow: 0 0 8px #00ff41, 0 0 16px #00ff41 inset;
+  }
+  h1,button{
+        text-shadow: 0 0 1px #00ff41, 0 0 12px #00ff41;
+  }
+  button:hover{
+        background: #000;
+        color: #00ff41;
+        box-shadow: 0 0 12px #00ff41, 0 0 24px #00ff41;
+  }
+  body{
+        font-family: "Courier New", monospace;
+  }
+  
+.mode-toggle{
+  grid-column: 1 / -1;          
+  display: flex;
+  align-items: center;
+  gap: 18px;                      
+  margin: 4px 0 6px;
+}
+
+.mode-toggle label{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;                      
+  font-size: 0.95rem;
+  color: var(--button_text);
+}
+
+.mode-toggle input[type="radio"]{
+  accent-color: var(--outer);     
+}
